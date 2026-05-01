@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI スライド ジェネレーター</title>
+  <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #111118;
+      --surface2: #16161f;
+      --border: rgba(255,255,255,0.08);
+      --border-hover: rgba(255,255,255,0.18);
+      --accent: #6c63ff;
+      --accent2: #a78bfa;
+      --accent-glow: rgba(108,99,255,0.3);
+      --text: #f0f0f8;
+      --text-muted: #6b6b80;
+      --text-dim: #9898b0;
+      --success: #34d399;
+      --error: #f87171;
+      --error-bg: rgba(248,113,113,0.08);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Zen Kaku Gothic New', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 3rem 1rem 4rem;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* background grid */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(108,99,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(108,99,255,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* glow blob */
+    body::after {
+      content: '';
+      position: fixed;
+      top: -200px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, rgba(108,99,255,0.12) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      max-width: 640px;
+      margin: 0 auto;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* HEADER */
+    header {
+      text-align: center;
+      margin-bottom: 3rem;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 14px;
+      border: 1px solid rgba(108,99,255,0.4);
+      border-radius: 100px;
+      font-size: 0.65rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--accent2);
+      background: rgba(108,99,255,0.08);
+      margin-bottom: 1.2rem;
+    }
+
+    .badge::before {
+      content: '';
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    header h1 {
+      font-size: clamp(1.8rem, 5vw, 2.6rem);
+      font-weight: 900;
+      line-height: 1.15;
+      margin-bottom: 0.8rem;
+      background: linear-gradient(135deg, #fff 30%, var(--accent2) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    header p {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      line-height: 1.8;
+      max-width: 420px;
+      margin: 0 auto;
+    }
+
+    /* STEPS */
+    .steps {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 0;
+      margin-bottom: 2rem;
+    }
+
+    .step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      letter-spacing: 0.05em;
+    }
+
+    .step-num {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      font-family: 'DM Mono', monospace;
+    }
+
+    .step.active .step-num {
+      border-color: var(--accent);
+      background: rgba(108,99,255,0.15);
+      color: var(--accent2);
+      box-shadow: 0 0 12px var(--accent-glow);
+    }
+
+    .step.active { color: var(--accent2); }
+
+    .step-line {
+      width: 48px;
+      height: 1px;
+      background: var(--border);
+      margin: 0 6px;
+      margin-bottom: 16px;
+    }
+
+    /* CARD */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.8rem;
+      margin-bottom: 1rem;
+      transition: border-color 0.2s;
+    }
+
+    .card:hover { border-color: var(--border-hover); }
+
+    .row-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+
+    .field { margin-bottom: 1.2rem; }
+    .field:last-child { margin-bottom: 0; }
+
+    label {
+      display: block;
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 6px;
+    }
+
+    label .req {
+      color: var(--accent);
+      margin-left: 2px;
+    }
+
+    label .hint {
+      font-weight: 400;
+      text-transform: none;
+      letter-spacing: 0;
+      color: var(--text-muted);
+      font-size: 0.68rem;
+      margin-left: 6px;
+    }
+
+    input[type="text"], textarea {
+      width: 100%;
+      padding: 11px 14px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-family: inherit;
+      font-size: 0.88rem;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    input[type="text"]::placeholder, textarea::placeholder {
+      color: var(--text-muted);
+      font-size: 0.82rem;
+    }
+
+    input[type="text"]:focus, textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 110px;
+      line-height: 1.7;
+    }
+
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 1.4rem 0;
+    }
+
+    /* SLIDE COUNT */
+    .slide-count-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .slide-btn {
+      padding: 14px 8px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-family: inherit;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.18s;
+      text-align: center;
+    }
+
+    .slide-btn:hover {
+      border-color: var(--border-hover);
+      color: var(--text);
+    }
+
+    .slide-btn .count {
+      display: block;
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--accent2);
+      margin-bottom: 3px;
+      font-family: 'DM Mono', monospace;
+    }
+
+    .slide-btn .label {
+      display: block;
+      font-size: 0.65rem;
+      letter-spacing: 0.05em;
+    }
+
+    .slide-btn.selected {
+      border-color: var(--accent);
+      background: rgba(108,99,255,0.12);
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    .slide-btn.selected .label { color: var(--accent2); }
+
+    /* GENERATE BUTTON */
+    .generate-btn {
+      width: 100%;
+      padding: 16px;
+      background: linear-gradient(135deg, var(--accent) 0%, #8b5cf6 100%);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-family: inherit;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      letter-spacing: 0.03em;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .generate-btn::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 60%);
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .generate-btn:hover::before { opacity: 1; }
+    .generate-btn:hover { transform: translateY(-1px); box-shadow: 0 8px 24px var(--accent-glow); }
+    .generate-btn:active { transform: translateY(0); }
+    .generate-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: none;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* MESSAGES */
+    .error-msg {
+      padding: 12px 16px;
+      background: var(--error-bg);
+      border: 1px solid rgba(248,113,113,0.25);
+      border-radius: 10px;
+      font-size: 0.83rem;
+      color: var(--error);
+      line-height: 1.6;
+      display: none;
+      margin-bottom: 1rem;
+    }
+    .error-msg.visible { display: flex; align-items: flex-start; gap: 8px; }
+    .error-msg::before { content: '⚠'; flex-shrink: 0; }
+
+    /* OUTPUT */
+    .output-section { display: none; }
+    .output-section.visible { display: block; }
+
+    .output-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.6rem;
+      margin-bottom: 1rem;
+    }
+
+    .output-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+    }
+
+    .output-label {
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .output-label::before {
+      content: '';
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 8px var(--success);
+    }
+
+    .copy-btn {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 7px 16px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: all 0.15s;
+      font-weight: 500;
+    }
+
+    .copy-btn:hover { border-color: var(--accent); color: var(--accent2); }
+
+    .copy-btn.copied {
+      border-color: var(--success);
+      color: var(--success);
+      background: rgba(52,211,153,0.08);
+    }
+
+    .output-box {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.2rem;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.78rem;
+      line-height: 1.9;
+      color: var(--text-dim);
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 420px;
+      overflow-y: auto;
+      min-height: 80px;
+    }
+
+    .output-box::-webkit-scrollbar { width: 4px; }
+    .output-box::-webkit-scrollbar-track { background: transparent; }
+    .output-box::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* GAMMA TIP */
+    .gamma-tip {
+      margin-top: 0.8rem;
+      padding: 12px 16px;
+      background: rgba(52,211,153,0.06);
+      border: 1px solid rgba(52,211,153,0.2);
+      border-radius: 10px;
+      font-size: 0.8rem;
+      color: rgba(52,211,153,0.8);
+      line-height: 1.7;
+    }
+
+    .gamma-tip strong { color: var(--success); }
+
+    /* STEP GUIDE */
+    .gamma-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .gamma-step {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.78rem;
+    }
+
+    .gamma-step-num {
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      background: rgba(52,211,153,0.15);
+      border: 1px solid rgba(52,211,153,0.3);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.65rem;
+      font-weight: 700;
+      color: var(--success);
+      flex-shrink: 0;
+      font-family: 'DM Mono', monospace;
+    }
+
+    @media (max-width: 480px) {
+      header h1 { font-size: 1.6rem; }
+      .row-2 { grid-template-columns: 1fr; }
+      .slide-btn .count { font-size: 0.88rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="badge">AI Slide Generator</div>
+      <h1>スライド構成案を<br>AIが自動生成</h1>
+      <p>テーマと要点を入力するだけで、Gamma等のツールにそのまま貼り付けられるMarkdown形式の構成案を生成します</p>
+    </header>
+
+    <div class="steps">
+      <div class="step active">
+        <div class="step-num">1</div>
+        <span>入力</span>
+      </div>
+      <div class="step-line"></div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <span>AI生成</span>
+      </div>
+      <div class="step-line"></div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <span>Gamma</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="field">
+        <label>テーマ <span class="req">*</span><span class="hint">例）新サービスのご提案</span></label>
+        <input type="text" id="theme" placeholder="プレゼンのテーマを入力してください" />
+      </div>
+
+      <div class="row-2">
+        <div class="field">
+          <label>ターゲット <span class="req">*</span><span class="hint">例）30代の経営者</span></label>
+          <input type="text" id="target" placeholder="誰に向けた資料ですか？" />
+        </div>
+        <div class="field">
+          <label>目的・ゴール <span class="req">*</span><span class="hint">例）サービス導入の承認を得る</span></label>
+          <input type="text" id="goal" placeholder="このプレゼンで達成したいことは？" />
+        </div>
+      </div>
+
+      <div class="field">
+        <label>伝えたい要点・箇条書きメモ <span class="req">*</span></label>
+        <textarea id="notes" placeholder="・課題：〇〇&#10;・解決策：〇〇&#10;・費用：〇〇&#10;・スケジュール：〇〇"></textarea>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="field">
+        <label>スライド枚数の目安 <span class="req">*</span></label>
+        <div class="slide-count-row">
+          <button class="slide-btn" onclick="selectCount(this,'5〜8枚')">
+            <span class="count">5〜8</span>
+            <span class="label">枚／ショートプレゼン</span>
+          </button>
+          <button class="slide-btn selected" onclick="selectCount(this,'10〜12枚')">
+            <span class="count">10〜12</span>
+            <span class="label">枚／スタンダード</span>
+          </button>
+          <button class="slide-btn" onclick="selectCount(this,'15〜20枚')">
+            <span class="count">15〜20</span>
+            <span class="label">枚／詳細プレゼン</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="errorMsg" class="error-msg"></div>
+
+    <button class="generate-btn" id="genBtn" onclick="generate()">
+      <div class="spinner" id="spinner"></div>
+      <span id="btnText">✦ 構成案を生成する</span>
+    </button>
+
+    <div class="output-section" id="outputSection">
+      <div class="output-card">
+        <div class="output-header">
+          <span class="output-label">生成された構成案</span>
+          <button class="copy-btn" id="copyBtn" onclick="copyOutput()">コピー</button>
+        </div>
+        <div class="output-box" id="outputBox"></div>
+        <div class="gamma-tip">
+          <strong>次のステップ：Gammaに貼り付ける</strong>
+          <div class="gamma-steps">
+            <div class="gamma-step"><div class="gamma-step-num">1</div><span>上記をコピー</span></div>
+            <div class="gamma-step"><div class="gamma-step-num">2</div><span>Gammaを開く → 「新しいAI」をクリック</span></div>
+            <div class="gamma-step"><div class="gamma-step-num">3</div><span>「テキストから生成（Paste text）」に貼り付け → 生成</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let selectedCount = '10〜12枚';
+    let outputText = '';
+
+    function selectCount(btn, val) {
+      selectedCount = val;
+      document.querySelectorAll('.slide-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+    }
+
+    async function generate() {
+      const theme = document.getElementById('theme').value.trim();
+      const target = document.getElementById('target').value.trim();
+      const goal = document.getElementById('goal').value.trim();
+      const notes = document.getElementById('notes').value.trim();
+      const errEl = document.getElementById('errorMsg');
+
+      errEl.className = 'error-msg';
+
+      if (!theme || !target || !goal || !notes) {
+        errEl.textContent = 'すべての項目を入力してください。';
+        errEl.className = 'error-msg visible';
+        return;
+      }
+
+      const btn = document.getElementById('genBtn');
+      const spinner = document.getElementById('spinner');
+      const btnText = document.getElementById('btnText');
+      const outputSection = document.getElementById('outputSection');
+      const outputBox = document.getElementById('outputBox');
+
+      btn.disabled = true;
+      spinner.style.display = 'block';
+      btnText.textContent = '生成中...';
+      outputSection.className = 'output-section';
+      outputBox.textContent = '';
+
+      try {
+        const response = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ theme, target, goal, notes, slideCount: selectedCount })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || '生成に失敗しました');
+        }
+
+        outputText = data.result;
+        outputBox.textContent = outputText;
+        outputSection.className = 'output-section visible';
+        document.getElementById('copyBtn').className = 'copy-btn';
+        document.getElementById('copyBtn').textContent = 'コピー';
+
+        outputSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+      } catch (err) {
+        errEl.textContent = err.message;
+        errEl.className = 'error-msg visible';
+      } finally {
+        btn.disabled = false;
+        spinner.style.display = 'none';
+        btnText.textContent = '✦ 構成案を生成する';
+      }
+    }
+
+    function copyOutput() {
+      if (!outputText) return;
+      navigator.clipboard.writeText(outputText).then(() => {
+        const btn = document.getElementById('copyBtn');
+        btn.textContent = '✓ コピーしました';
+        btn.className = 'copy-btn copied';
+        setTimeout(() => {
+          btn.textContent = 'コピー';
+          btn.className = 'copy-btn';
+        }, 2500);
+      });
+    }
+  </script>
+</body>
+</html>
